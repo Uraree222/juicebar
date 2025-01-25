@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juicy Restaurant</title>
+    <style>
+        .hidden {
+            display: none;
+        }
+        #authStatus {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="authStatus">
+        <span id="userInfo"></span>
+        <button id="loginButton" onclick="window.location.href='/login.html'">Login</button>
+        <button id="logoutButton" class="hidden" onclick="logout()">Logout</button>
+    </div>
+
+    <h1>Welcome to Juicy Restaurant</h1>
+    <div id="menu">
+        <button id="AppleButton">Get Apple Juice</button>
+        <button id="OrangeButton">Get Orange Juice</button>
+        <button id="GrapeButton">Get Grape Juice</button>
+        <input type="text" id="customJuiceName" placeholder="Enter Juice Name">
+        <button id="CustomButton">Get Custom Juice</button>
+        <p>Click the buttons above to see juice details.</p>
+    </div>
+    <div id="output"></div>
+
+    <div id="customRecipeForm" class="hidden">
+        <h2>Add, Update, or Delete a Recipe</h2>
+        <form id="recipeForm">
+            <label>Recipe Name: <input type="text" id="recipeName" required></label><br>
+            <label>Title: <input type="text" id="recipeTitle" required></label><br>
+            <label>Ingredients (comma-separated): <input type="text" id="recipeIngredients" required></label><br>
+            <label>Steps (comma-separated): <input type="text" id="recipeSteps" required></label><br>
+            <button id="addRecipeButton" type="button">Add Recipe</button>
+            <button id="updateRecipeButton" type="button">Update Recipe</button>
+            <button id="deleteRecipeButton" type="button">Delete Recipe</button>
+        </form>
+    </div>
+        
+    <script>
+        // Check authentication status on page load
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/auth-status');
+                const data = await response.json();
+                
+                const loginButton = document.getElementById('loginButton');
+                const logoutButton = document.getElementById('logoutButton');
+                const userInfo = document.getElementById('userInfo');
+                const customRecipeForm = document.getElementById('customRecipeForm');
+                
+                if (data.isAuthenticated) {
+                    loginButton.classList.add('hidden');
+                    logoutButton.classList.remove('hidden');
+                    userInfo.textContent = `Welcome, ${data.username}! `;
+                    customRecipeForm.classList.remove('hidden');
+                } else {
+                    loginButton.classList.remove('hidden');
+                    logoutButton.classList.add('hidden');
+                    userInfo.textContent = '';
+                    customRecipeForm.classList.add('hidden');
+                }
+            } catch (error) {
+                console.error('Error checking auth status:', error);
+            }
+        }
+
+        // Logout function
+        async function logout() {
+            try {
+                const response = await fetch('/api/logout', {
+                    method: 'POST'
+                });
+                if (response.ok) {
+                    checkAuth();
+                }
+            } catch (error) {
+                console.error('Error logging out:', error);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            checkAuth();
+            const output = document.getElementById('output');
+
+            // Fetch Apple Juice Recipe
+            document.getElementById('AppleButton').addEventListener('click', async () => {
+              console.log('Apple button clicked!');
+                await fetchRecipe('AppleJuice');
+            });
+
+            // Fetch Orange Juice Recipe
+            document.getElementById('OrangeButton').addEventListener('click', async () => {
+                console.log('Orange button clicked!');
+                await fetchRecipe('OrangeJuice');
+            });
+
+            // Fetch Grape Juice Recipe
+            document.getElementById('GrapeButton').addEventListener('click', async () => {
+                console.log('Grape button clicked!');
+                await fetchRecipe('GrapeJuice');
+            });
+
+            // Fetch Custom Juice Recipe
+            document.getElementById('CustomButton').addEventListener('click', async () => {
+                console.log('Custom button clicked!');
+                const juiceName = document.getElementById('customJuiceName').value.trim();
+                if (!juiceName) {
+                    alert('Please enter a juice name!');
+                    return;
+                }
+                await fetchRecipe(juiceName);
+            });
+
+            // Fetch Recipe Function
+            async function fetchRecipe(juiceName) {
+                try {
+                    const response = await fetch(`http://localhost:3000/api/${juiceName}`);
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch data: ${response.status} ${response.statusText}`);
+                    }
+                    const data = await response.json();
+                    output.innerHTML = `
+                        <h2>${data.title}</h2>
+                        <h3>Ingredients:</h3>
+                        <ul>${data.ingredients.map(item => `<li>${item}</li>`).join('')}</ul>
+                        <h3>Steps:</h3>
+                        <ol>${data.steps.map(step => `<li>${step}</li>`).join('')}</ol>
+                    `;
+                } catch (error) {
+                    output.innerText = `Error: ${error.message}`;
+                }
+            }
+
+            function clearRecipeForm() {
+                document.getElementById('recipeName').value = '';
+                document.getElementById('recipeTitle').value = '';
+                document.getElementById('recipeIngredients').value = '';
+                document.getElementById('recipeSteps').value = '';
+            }
+
+            // Add Recipe
+            document.getElementById('addRecipeButton').addEventListener('click', async () => {
+                const recipe = getRecipeFormData();
+                if (!recipe) return;
+
+                try {
+                    const response = await fetch(`/api/${recipe.name}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(recipe)
+                    });
+
+                    if (response.ok) {
+                        alert('Recipe added successfully!');
+                        clearRecipeForm();
+                    } else if (response.status === 401) {
+                        alert('Please login to add recipes');
+                        window.location.href = '/login.html';
+                    } else {
+                        alert('Error adding recipe');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('Error adding recipe');
+                }
+            });
+
+            // Update Recipe
+            document.getElementById('updateRecipeButton').addEventListener('click', async () => {
+                const recipe = getRecipeFormData();
+                if (!recipe) return;
+
+                try {
+                    const response = await fetch(`/api/${recipe.name}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(recipe)
+                    });
+
+                    if (response.ok) {
+                        alert('Recipe updated successfully!');
+                        clearRecipeForm();
+                    } else if (response.status === 401) {
+                        alert('Please login to update recipes');
+                        window.location.href = '/login.html';
+                    } else {
+                        alert('Error updating recipe');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('Error updating recipe');
+                }
+            });
+
+            // Delete Recipe
+            document.getElementById('deleteRecipeButton').addEventListener('click', async () => {
+                const name = document.getElementById('recipeName').value.trim();
+                if (!name) {
+                    alert('Please enter the name of the recipe to delete!');
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/api/${name}`, {
+                        method: 'DELETE'
+                    });
+
+                    if (response.ok) {
+                        alert('Recipe deleted successfully!');
+                        clearRecipeForm();
+                    } else if (response.status === 401) {
+                        alert('Please login to delete recipes');
+                        window.location.href = '/login.html';
+                    } else {
+                        alert('Error deleting recipe');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('Error deleting recipe');
+                }
+            });
+
+            // Get Recipe Form Data
+            function getRecipeFormData() {
+                const name = document.getElementById('recipeName').value.trim();
+                const title = document.getElementById('recipeTitle').value.trim();
+                const ingredients = document.getElementById('recipeIngredients').value.split(',').map(item => item.trim());
+                const steps = document.getElementById('recipeSteps').value.split(',').map(item => item.trim());
+
+                if (!name || !title || !ingredients.length || !steps.length) {
+                    alert('Please fill in all fields!');
+                    return null;
+                }
+
+                return { name, title, ingredients, steps };
+            }
+        });
+    </script>
+</body>
+</html>
