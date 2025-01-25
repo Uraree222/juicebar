@@ -3,12 +3,17 @@
 <head>
     <title>Login</title>
     <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+        }
         .login-container {
             max-width: 300px;
             margin: 100px auto;
             padding: 20px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         .form-group {
             margin-bottom: 15px;
@@ -16,16 +21,35 @@
         input {
             width: 100%;
             padding: 8px;
-            margin-top: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
         }
         button {
             width: 100%;
             padding: 10px;
-            background-color: #007bff;
+            background-color: #4CAF50;
             color: white;
             border: none;
-            border-radius: 5px;
+            border-radius: 4px;
             cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .message {
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        .error {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+        .success {
+            background-color: #e8f5e9;
+            color: #2e7d32;
         }
     </style>
 </head>
@@ -43,34 +67,54 @@
             </div>
             <button type="submit">Login</button>
         </form>
+        <div id="message" class="message"></div>
     </div>
 
     <script>
-        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+        const loginForm = document.getElementById('loginForm');
+        const messageDiv = document.getElementById('message');
+
+        function showMessage(text, isError = false) {
+            messageDiv.textContent = text;
+            messageDiv.style.display = 'block';
+            messageDiv.className = 'message ' + (isError ? 'error' : 'success');
+        }
+
+        loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+
+            // Basic validation
+            if (!username || !password) {
+                showMessage('Please enter both username and password', true);
+                return;
+            }
 
             try {
+                showMessage('Logging in...', false);
                 const response = await fetch('/api/login', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ username, password })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password }),
+                    credentials: 'include'  // Important for cookies/session
                 });
 
                 const data = await response.json();
                 
                 if (response.ok) {
                     alert('Login successful!');
-                    window.location.href = '/'; // Redirect to home page
+                    // Wait a moment for the session to be saved
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 500);
                 } else {
                     alert(data.error || 'Login failed');
                 }
             } catch (error) {
-                alert('Error during login');
+                console.error('Login error:', error);
+                showMessage('Error connecting to server', true);
             }
         });
     </script>

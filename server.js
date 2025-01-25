@@ -10,8 +10,13 @@ app.use(express.json()); // Parse JSON bodies
 app.use(express.static('public')); // Serve static files
 app.use(session({
   secret: 'your-secret-key',
-  resave: false,
-  saveUninitialized: false
+  resave: true,
+  saveUninitialized: true,
+  cookie: {
+    secure: false, // set to true if using https
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
 }));
 
 // Authentication middleware
@@ -60,9 +65,60 @@ const users = {
   'user': 'userpass'
 };
 
+// Auth routes
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body;
+  console.log('Login attempt:', { username });
+  
+  if (!username || !password) {
+    console.log('Missing username or password');
+    return res.status(400).json({ error: 'Username and password are required' });
+  }
+
+  if (users[username] && users[username] === password) {
+    req.session.user = username;
+    req.session.save((err) => {
+      if (err) {
+        console.error('Session save error:', err);
+        return res.status(500).json({ error: 'Failed to save session' });
+      }
+      console.log('Login successful for:', username);
+      console.log('Session data:', req.session);
+      res.json({ success: true, message: 'Login successful' });
+    });
+  } else {
+    console.log('Invalid credentials for:', username);
+    res.status(401).json({ error: 'Invalid username or password' });
+  }
+});
+
+app.get('/api/auth-status', (req, res) => {
+  console.log('Auth status check - Session:', req.session);
+  console.log('User in session:', req.session.user);
+  res.json({ 
+    isAuthenticated: !!req.session.user,
+    username: req.session.user 
+  });
+});
+
+app.post('/api/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      console.error('Logout error:', err);
+      return res.status(500).json({ error: 'Failed to logout' });
+    }
+    res.json({ success: true, message: 'Logged out successfully' });
+  });
+});
+
 // Serve index.html
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Serve login.html
+app.get('/login.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
 // GET a recipe
@@ -98,36 +154,6 @@ app.get('/api/:juiceName', (req, res) => {
   } catch (err) {
       res.status(500).json({ error: 'Failed to fetch recipe!' });
   }
-});
-
-// Login endpoint
-app.post('/api/login', (req, res) => {
-  const { username, password } = req.body;
-  
-  if (!username || !password) {
-    return res.status(400).json({ error: 'Username and password are required' });
-  }
-
-  if (users[username] && users[username] === password) {
-    req.session.user = username;  // Store user in session
-    res.json({ success: true, message: 'Login successful' });
-  } else {
-    res.status(401).json({ error: 'Invalid username or password' });
-  }
-});
-
-// Logout endpoint
-app.post('/api/logout', (req, res) => {
-  req.session.destroy();
-  res.json({ success: true, message: 'Logged out successfully' });
-});
-
-// Check auth status
-app.get('/api/auth-status', (req, res) => {
-  res.json({ 
-    isAuthenticated: !!req.session.user,
-    username: req.session.user 
-  });
 });
 
 // POST a new recipe
@@ -191,14 +217,6 @@ app.delete('/api/:juiceName', requireAuth, (req, res) => {
     } catch (err) {
         res.status(500).json({ error: 'Failed to delete recipe!' });
     }
-});
-
-// Check auth status
-app.get('/api/auth-status', (req, res) => {
-  res.json({ 
-    isAuthenticated: !!req.session.user,
-    username: req.session.user 
-  });
 });
 
 // Start the server
